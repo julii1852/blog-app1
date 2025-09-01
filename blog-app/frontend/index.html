@@ -1,0 +1,124 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <title>Blog App Demo</title>
+  <style>
+    body{ font-family: Arial; max-width:900px; margin:20px auto; }
+    .card{ border:1px solid #ddd; padding:12px; margin:8px 0; border-radius:6px; }
+    input,textarea{ width:100%; padding:8px; margin:6px 0; }
+    button{ padding:8px 12px; margin-right:8px; }
+  </style>
+</head>
+<body>
+  <h1>Blog App — Demo Frontend</h1>
+  <div id="auth" class="card">
+    <h3>Auth</h3>
+    <input id="email" placeholder="email" />
+    <input id="username" placeholder="username (for register)" />
+    <input id="password" placeholder="password" type="password" />
+    <button onclick="register()">Register</button>
+    <button onclick="login()">Login</button>
+    <button onclick="logout()">Logout</button>
+    <div id="me"></div>
+  </div>
+
+  <div id="actions" class="card">
+    <h3>Actions</h3>
+    <button onclick="getPublic()">Load Public Posts</button>
+    <button onclick="getFeed()">Load My Feed</button>
+    <button onclick="showCreate()">Create Post</button>
+    <div id="createBox" style="display:none;">
+      <input id="ptitle" placeholder="title" />
+      <textarea id="pcontent" placeholder="content"></textarea>
+      <input id="ptags" placeholder="comma tags" />
+      <select id="pvis"><option value="public">public</option><option value="private">private</option></select>
+      <button onclick="createPost()">Create</button>
+    </div>
+  </div>
+
+  <div id="posts"></div>
+
+<script>
+const API = (window.API_BASE = 'http://localhost:4000/api');
+
+function setMeTxt(){
+  const token = localStorage.getItem('token');
+  document.getElementById('me').innerText = token ? 'Logged in' : 'Not logged';
+}
+
+setMeTxt();
+
+async function register(){
+  const email = document.getElementById('email').value;
+  const username = document.getElementById('username').value;
+  const password = document.getElementById('password').value;
+  const res = await fetch(API + '/auth/register', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({email,username,password})});
+  alert((await res.json()).message || JSON.stringify(await res.json()));
+}
+
+async function login(){
+  const email = document.getElementById('email').value;
+  const password = document.getElementById('password').value;
+  const res = await fetch(API + '/auth/login', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({email,password})});
+  const data = await res.json();
+  if(data.token){ localStorage.setItem('token', data.token); alert('Logged in'); setMeTxt(); }
+  else alert(JSON.stringify(data));
+}
+
+function logout(){ localStorage.removeItem('token'); setMeTxt(); }
+
+function authHeaders(){
+  const t = localStorage.getItem('token');
+  return t ? { 'Authorization': 'Bearer ' + t } : {};
+}
+
+function showCreate(){ const el = document.getElementById('createBox'); el.style.display = el.style.display==='none'?'block':'none'; }
+
+async function createPost(){
+  const title = document.getElementById('ptitle').value;
+  const content = document.getElementById('pcontent').value;
+  const tags = document.getElementById('ptags').value;
+  const visibility = document.getElementById('pvis').value;
+  const res = await fetch(API + '/posts', {method:'POST', headers: {...authHeaders(),'Content-Type':'application/json'}, body: JSON.stringify({title,content,tags,visibility})});
+  const data = await res.json();
+  alert(data._id ? 'Post created' : JSON.stringify(data));
+}
+
+async function getPublic(){
+  const res = await fetch(API + '/posts/public');
+  const posts = await res.json();
+  renderPosts(posts);
+}
+
+async function getFeed(){
+  const res = await fetch(API + '/posts/feed', {headers: authHeaders()});
+  const posts = await res.json();
+  renderPosts(posts);
+}
+
+function renderPosts(posts){
+  const out = document.getElementById('posts');
+  out.innerHTML = '';
+  posts.forEach(p => {
+    const d = document.createElement('div');
+    d.className='card';
+    d.innerHTML = '<b>'+p.title+'</b> by '+(p.author?.username||'unknown')+'<div>'+ (p.tags?('Tags: '+p.tags.join(', ')):'') +'</div>'
+      + '<p>'+p.content.substring(0,300) +'</p>'
+      + '<div><button onclick="viewPost(\''+p._id+'\')">View</button></div>';
+    out.appendChild(d);
+  });
+}
+
+async function viewPost(id){
+  const res = await fetch(API + '/posts/' + id, {headers: authHeaders()});
+  if(res.status===403){ alert('Private or no access'); return; }
+  const data = await res.json();
+  // show post details
+  const post = data.post || data;
+  alert('Title: ' + post.title + '\nBy: ' + (post.author?.username||'') + '\n' + post.content);
+}
+
+</script>
+</body>
+</html>
